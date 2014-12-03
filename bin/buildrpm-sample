@@ -1,0 +1,149 @@
+#!/bin/bash
+#set -x
+
+ask()
+{
+  local p="$1"
+  local k="$2"
+  local d="$3"
+  read -p "$p($d)" $k
+  if eval "[[ -z \$$k ]]"; then export $k=$d; fi
+}
+
+setup()
+{
+  echo "(Fill below with RPM info)"
+  ask "Name: " NAME "helloworld"
+  ask "Version: " VERSION "1.0.0"
+  ask "Release: " RELEASE "01"
+
+  TOPDIR=$PWD/.rpm
+  TMPDIR=/var/tmp
+}
+
+teardown()
+{
+  for rpm in `find $TOPDIR/RPMS/ -name '*.rpm'`
+  do
+    mv $rpm .
+  done
+  rm -rf $TOPDIR
+}
+
+build_rpm()
+{
+
+  rpm_prep_topdir && build && clean
+}
+
+main()
+{
+  setup && build_rpm && teardown
+}
+
+rpm_prep_topdir()
+{
+  rm -rf $TOPDIR
+  mkdir -p $TOPDIR
+  mkdir -p $TOPDIR/BUILD
+  mkdir -p $TOPDIR/RPMS
+  mkdir -p $TOPDIR/SOURCES
+  mkdir -p $TOPDIR/SPECS
+  mkdir -p $TOPDIR/SRPMS
+}
+
+build_spec()
+{
+  local SPEC_CONTENTS=""
+
+  read -d "" SPEC_CONTENTS <<"END"
+Name: %{rpmname}
+Summary: This is %{name}.
+Version: {{Version}}
+Release: {{Release}}
+License: Copyright (c) Sample.  All Rights Reserved.
+Distribution: Sample
+Vendor: Sample Corporation
+URL: https://www.sample.com
+Packager: Your Name <yourid@sample.com>
+Group: Sample Product
+Source: %{name}-%{version}.tar.gz
+BuildRoot: %{_tmppath}/%{name}-%{version}-%(id -u -n)
+%define debug_package %{nil}
+%define _redhatvers %(lsb_release -sr | cut -f 1 -d '.')
+%define _rpmfilename %%{ARCH}/%%{NAME}-%%{VERSION}-%%{RELEASE}.RHEL%{_redhatvers}-%%{ARCH}.rpm
+
+# Install Requirements
+Requires: ComputeElement
+
+# Build Requirements
+BuildRequires: redhat-lsb
+
+%description
+This is a sample of %{name} product.
+
+%prep
+%setup -q
+
+%build
+#make
+
+%install
+rm -rf ${RPM_BUILD_ROOT}
+mkdir -p ${RPM_BUILD_ROOT}
+cp -P -R * ${RPM_BUILD_ROOT}
+
+%clean
+rm -rf ${RPM_BUILD_ROOT}
+rm -rf %{name}-%{version}
+
+%files
+%defattr(-,root,root,-)
+/
+END
+
+  fill_template_with()
+  {
+    local k="$1"
+    local v="$2"
+    sed -e "s~{{$k}}~$v~g"
+  }
+
+  # fill spec template
+  echo "$SPEC_CONTENTS" | \
+    fill_template_with "Name" $NAME | \
+    fill_template_with "Release" $RELEASE | \
+    fill_template_with "Version" $VERSION
+
+}
+
+build()
+{
+  make_tarball()
+  {
+    cp -R -p . $TMPDIR/$NAME-$VERSION
+    mv $TMPDIR/$NAME-$VERSION .
+    tar czfv $TOPDIR/SOURCES/$NAME-$VERSION.tar.gz --exclude ".svn" --exclude ".git" $NAME-$VERSION
+    rm -rf $NAME-$VERSION
+  }
+
+  make_specfile()
+  {
+    build_spec > $TOPDIR/SPECS/$NAME.spec
+  }
+
+  make_rpm()
+  {
+    rpmbuild -ba --define "_topdir $TOPDIR/" --define "rpmname $NAME" $TOPDIR/SPECS/$NAME.spec
+  }
+
+  make_tarball && make_specfile && make_rpm
+}
+
+clean()
+{
+  rm -rf $NAME-$VERSION
+  rm -rf $TOPDIR/SOURCES/$NAME-$VERSION.tar.gz
+}
+
+main "$@"
