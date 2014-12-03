@@ -74,10 +74,10 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%(id -u -n)
 %define _rpmfilename %%{ARCH}/%%{NAME}-%%{VERSION}-%%{RELEASE}.RHEL%{_redhatvers}-%%{ARCH}.rpm
 
 # Install Requirements
-Requires: ComputeElement
+#Requires: ComputeElement
 
 # Build Requirements
-BuildRequires: redhat-lsb
+#BuildRequires: redhat-lsb
 
 %description
 This is a sample of %{name} product.
